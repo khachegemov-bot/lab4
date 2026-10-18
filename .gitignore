@@ -1,0 +1,10 @@
+# секреты
+.env
+
+# сборка
+target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
