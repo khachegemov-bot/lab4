@@ -2,6 +2,7 @@ package ru.lab.cityreports.exception;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -116,11 +117,23 @@ public class GlobalExceptionHandler {
     /**
      * Сработало ограничение целостности в БД (UNIQUE, CHECK, FOREIGN KEY...).
      * Клиенту НЕ отдаём текст ошибки PostgreSQL: в нём имена таблиц, столбцов и значения.
+     * В лог тоже пишем только ИМЯ ограничения: полный текст ошибки PostgreSQL содержит
+     * строку "Failing row contains (...)" со всеми значениями, в том числе хешем пароля.
      */
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> integrity(DataIntegrityViolationException e) {
-        log.warn("Нарушено ограничение целостности БД: {}", e.getMostSpecificCause().getMessage());
+        log.warn("Нарушено ограничение целостности БД: {}", constraintName(e));
         return build(HttpStatus.CONFLICT, List.of("Операция нарушает ограничения целостности данных"));
+    }
+
+    /** Имя нарушенного ограничения (например, ux_users_username_lower) без значений строки. */
+    private static String constraintName(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof ConstraintViolationException cve && cve.getConstraintName() != null) {
+                return cve.getConstraintName();
+            }
+        }
+        return "неизвестное ограничение";
     }
 
     /** Две транзакции одновременно изменили одну запись (@Version) или не дождались блокировки. */
